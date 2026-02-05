@@ -1,4 +1,4 @@
-# ImgBed - 简易多平台图床服务
+# ImgBed - 多平台图床服务
 
 一个支持 Discord、HuggingFace 和 Telegram 的多平台图床服务，使用 Node.js + Vue 3 + SQLite 构建。
 
@@ -92,7 +92,6 @@ ImgBed/
 │   └── vite.config.js
 ├── data/                  # 数据目录（自动创建）
 │   └── imgbed.db         # SQLite 数据库
-├── convert-kv-to-sqlite.js # 数据迁移脚本（从 CloudFlare-ImgBed 迁移）
 ├── package.json
 ├── .env                  # 环境变量配置（需要创建）
 └── .env.example          # 环境变量配置示例
@@ -272,127 +271,6 @@ npm run server
 - 删除文件（仅删除本地记录，第三方平台文件仍保留）
 
 ## 数据库
-
-### 数据迁移（从 CloudFlare-ImgBed 迁移数据）
-
-如果您之前使用的是 [CloudFlare-ImgBed](https://github.com/MarSeventh/CloudFlare-ImgBed) 项目，可以使用数据迁移脚本将 KV 存储的数据迁移到 SQLite 数据库。
-
-#### 前置条件
-
-1. **备份原始数据**：在迁移前，请先备份 CloudFlare-ImgBed 的数据
-2. **确保数据库已初始化**：至少启动一次 ImgBed，确保数据库文件已创建
-3. **准备 KV 数据路径**：找到 CloudFlare-ImgBed 的 KV 数据目录
-
-#### CloudFlare-ImgBed 数据位置
-
-**Docker 部署**：
-- KV 数据目录：`/path/to/cloudflare-imgbed/data/v3/kv/img_url/blobs`
-- KV 数据库文件：`/path/to/cloudflare-imgbed/data/v3/kv/miniflare-KVNamespaceObject/*.sqlite`
-
-**手动部署**：
-- KV 数据目录：`/www/wwwroot/cloudflare-imgbed/data/v3/kv/img_url/blobs`
-- KV 数据库文件：`/www/wwwroot/cloudflare-imgbed/data/v3/kv/miniflare-KVNamespaceObject/*.sqlite`
-
-#### 迁移步骤
-
-1. **编辑迁移脚本配置**：
-
-打开 `convert-kv-to-sqlite.js` 文件，修改顶部三个路径配置：
-
-```javascript
-// 1. CloudFlare-ImgBed KV 数据目录
-const KV_BLOBS_DIR = '/path/to/cloudflare-imgbed/data/v3/kv/img_url/blobs';
-
-// 2. CloudFlare-ImgBed KV 数据库文件（miniflare 模拟 KV 的 SQLite 文件）
-const KV_DB_PATH = '/path/to/cloudflare-imgbed/data/v3/kv/miniflare-KVNamespaceObject/6699e4548d20e062cd70a4a42a819647c54d02f5941ab268cd686295d1c288e5.sqlite';
-
-// 3. ImgBed 目标数据库路径
-const SQLITE_DB_PATH = './data/imgbed.db';
-```
-
-2. **运行迁移脚本**：
-
-```bash
-# 确保在项目根目录
-cd ImgBed
-
-# 运行迁移脚本
-node convert-kv-to-sqlite.js
-```
-
-3. **查看迁移结果**：
-
-脚本会显示以下信息：
-- 找到的 KV 记录数
-- 有效的文件记录数
-- 跳过的记录数（无有效 metadata）
-- 成功插入的记录数
-- 最终数据库总记录数
-
-示例输出：
-
-```
-[2024-01-01T12:00:00.000Z] 开始转换KV数据到SQLite...
-[2024-01-01T12:00:00.100Z] 正在加载KV数据库...
-[2024-01-01T12:00:00.200Z] 正在加载目标数据库...
-[2024-01-01T12:00:00.300Z] 正在重建目标表...
-[2024-01-01T12:00:00.310Z] 表重建完成
-[2024-01-01T12:00:00.320Z] 正在读取KV数据...
-[2024-01-01T12:00:00.400Z] 找到 1500 条KV记录
-[2024-01-01T12:00:01.000Z] 已处理 10/1500 条记录，有效: 9
-[2024-01-01T12:00:01.600Z] 已处理 20/1500 条记录，有效: 18
-...
-[2024-01-01T12:00:05.000Z] 处理完成: 共 1500 条KV记录，有效 1450 条，跳过 50 条
-[2024-01-01T12:00:05.100Z] 开始批量插入数据...
-[2024-01-01T12:00:06.000Z] 批次 10/15 完成，已插入 1000/1450 条记录
-[2024-01-01T12:00:06.500Z] 转换完成！
-[2024-01-01T12:00:06.500Z] 总计处理: 1500 条KV记录
-[2024-01-01T12:00:06.500Z] 有效记录: 1450 条
-[2024-01-01T12:00:06.500Z] 成功插入: 1450 条
-[2024-01-01T12:00:06.500Z] 数据库总记录数: 1450 条
-[2024-01-01T12:00:06.600Z] 正在保存数据库...
-[2024-01-01T12:00:06.700Z] 数据库已保存
-[2024-01-01T12:00:06.700Z] 数据库连接已关闭
-```
-
-#### 迁移后验证
-
-1. **启动 ImgBed**：
-```bash
-npm run server
-```
-
-2. **访问文件列表**：
-   - 访问 http://localhost:3000/files
-   - 检查迁移的文件是否显示正常
-
-3. **测试文件访问**：
-   - 随机选择几个文件，测试是否能正常访问
-   - 检查中文文件名是否能正常显示
-
-#### 注意事项
-
-1. **数据覆盖**：
-   - 迁移脚本会重建 `files` 表，所有旧数据会被删除
-   - 如果 ImgBed 已有数据，请先备份
-
-2. **数据完整性**：
-   - 如果 KV 中的元数据损坏，对应记录会被跳过
-   - 跳过的记录会在日志中显示
-
-3. **性能优化**：
-   - 迁移脚本使用批量插入，每批 100 条
-   - 可以通过修改 `BATCH_SIZE` 调整批量大小
-
-4. **错误处理**：
-   - 如果某个记录处理失败，不会影响其他记录
-   - 所有错误都会记录在日志中
-
-5. **文件存储**：
-   - 迁移只迁移文件记录，不影响实际文件
-   - 文件仍然存储在 Discord/HuggingFace/Telegram
-
----
 
 ### 自动初始化
 
@@ -989,4 +867,3 @@ MIT License
 - 中文文件名支持
 - 高性能数据库查询（支持 10 万+ 文件）
 - 支持 CDN 加速部署
-- 提供数据迁移脚本，支持从 CloudFlare-ImgBed 迁移 KV 数据

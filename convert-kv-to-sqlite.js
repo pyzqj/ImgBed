@@ -2,48 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const initSqlJs = require('sql.js');
 
-// ========== 配置区域 ==========
-
-/**
- * CloudFlare-ImgBed KV 数据目录
- *
- * Docker 部署路径示例：
- * /path/to/cloudflare-imgbed/data/v3/kv/img_url/blobs
- *
- * 手动部署路径示例：
- * /www/wwwroot/cloudflare-imgbed/data/v3/kv/img_url/blobs
- */
-const KV_BLOBS_DIR = '/path/to/cloudflare-imgbed/data/v3/kv/img_url/blobs';
-
-/**
- * CloudFlare-ImgBed KV 数据库文件
- *
- * 通常是 miniflare 模拟 KV 使用的 SQLite 文件
- * 在 data/v3/kv/ 目录下查找类似这样的文件：
- * miniflare-KVNamespaceObject/6699e4548d20e062cd70a4a42a819647c54d02f5941ab268cd686295d1c288e5.sqlite
- *
- * Docker 部署路径示例：
- * /path/to/cloudflare-imgbed/data/v3/kv/miniflare-KVNamespaceObject/6699e4548d20e062cd70a4a42a819647c54d02f5941ab268cd686295d1c288e5.sqlite
- *
- * 手动部署路径示例：
- * /www/wwwroot/cloudflare-imgbed/data/v3/kv/miniflare-KVNamespaceObject/6699e4548d20e062cd70a4a42a819647c54d02f5941ab268cd686295d1c288e5.sqlite
- */
-const KV_DB_PATH = '/path/to/cloudflare-imgbed/data/v3/kv/miniflare-KVNamespaceObject/6699e4548d20e062cd70a4a42a819647c54d02f5941ab268cd686295d1c288e5.sqlite';
-
-/**
- * ImgBed SQLite 数据库文件路径
- *
- * 这是目标数据库，转换后的数据将写入此文件
- *
- * 相对路径示例（推荐）：
- * ./data/imgbed.db
- *
- * 绝对路径示例：
- * /www/wwwroot/imgbed/data/imgbed.db
- */
-const SQLITE_DB_PATH = './data/imgbed.db';
-
-// ========== 配置区域结束 ==========
+const KV_BLOBS_DIR = '/www/wwwroot/cloudflare-imgbed/data/v3/kv/img_url/blobs';
+const KV_DB_PATH = '/www/wwwroot/cloudflare-imgbed/data/v3/kv/miniflare-KVNamespaceObject/6699e4548d20e062cd70a4a42a819647c54d02f5941ab268cd686295d1c288e5.sqlite';
+const SQLITE_DB_PATH = '/www/wwwroot/imgbed/data/imgbed.db';
 
 const BATCH_SIZE = 100;
 const LOG_INTERVAL = 10;
