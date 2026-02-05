@@ -1,0 +1,33 @@
+/* Ghibli Style 全局样式 */
+
+:root {
+  --ghibli-sage: #7cb9a8;
+  --ghibli-cream: #f4e4bc;
+  --ghibli-coral: #e8a87c;
+  --ghibli-sky: #85cdca;
+  --ghibli-rose: #c38d94;
+  --ghibli-brown: #5a4a3a;
+}
+
+/* 柔和渐变背景 */
+.ghibli-sky-gradient {
+  background: linear-gradient(180deg, #87ceeb 0%, #b4e4f5 50%, #f4e4bc 100%);
+}
+
+/* 手绘风格边框 */
+.ghibli-border {
+  border: 2px solid rgba(212, 196, 154, 0.5);
+  border-radius: 1.5rem;
+}
+
+/* 云朵样式 */
+.ghibli-cloud {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 9999px;
+  filter: blur(4px);
+}
+
+/* 柔和阴影 */
+.ghibli-shadow {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+}

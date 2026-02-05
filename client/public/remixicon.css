@@ -1,0 +1,18 @@
+@font-face {
+  font-family: "remixicon";
+  src: url("/remixicon.woff2") format("woff2"),
+       url("/remixicon.woff") format("woff"),
+       url("/remixicon.ttf") format("truetype");
+  font-display: swap;
+}
+
+[class^="ri-"], [class*=" ri-"] {
+  font-family: "remixicon" !important;
+  font-style: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ri-discord-fill:before { content: "\f0f5"; }
+.ri-robot-fill:before { content: "\f2c6"; }
+.ri-telegram-fill:before { content: "\f2a2"; }
