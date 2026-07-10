@@ -59,6 +59,12 @@
               <img src="/telegram.svg" alt="Telegram" class="platform-icon-img" />
               <span>Telegram</span>
             </label>
+            
+            <label class="platform-option">
+              <input type="radio" v-model="selectedPlatform" value="localdrive" />
+              <img src="/local-drive.svg" alt="Local Drive" class="platform-icon-img" />
+              <span>Local Drive</span>
+            </label>
           </div>
         </div>
         
@@ -82,8 +88,16 @@
             <p><strong>访问地址:</strong></p>
             <div class="url-box">
               <input :value="uploadResult.accessUrl" readonly class="ghibli-input" />
-              <button @click="copyUrl" class="ghibli-button ghibli-button-primary copy-button">复制</button>
+              <button @click="copyUrl('access')" class="ghibli-button ghibli-button-primary copy-button">复制</button>
             </div>
+            <!-- Local Drive 通道显示拼接好的直接下载地址 -->
+            <template v-if="uploadResult.directDownloadUrl">
+              <p><strong>直接下载地址（原通道）:</strong></p>
+              <div class="url-box">
+                <input :value="uploadResult.directDownloadUrl" readonly class="ghibli-input" />
+                <button @click="copyUrl('direct')" class="ghibli-button ghibli-button-primary copy-button">复制</button>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -167,8 +181,11 @@ async function handleUpload() {
   uploading.value = false;
 }
 
-function copyUrl() {
-  const url = uploadResult.value.accessUrl;
+function copyUrl(type = 'access') {
+  // 根据类型选择要复制的 URL
+  const url = type === 'direct' && uploadResult.value.directDownloadUrl
+    ? uploadResult.value.directDownloadUrl
+    : uploadResult.value.accessUrl;
   
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(url).then(() => {
@@ -223,7 +240,7 @@ function fallbackCopy(url) {
 }
 
 .container {
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 40px 24px;
   position: relative;

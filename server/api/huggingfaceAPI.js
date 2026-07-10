@@ -21,21 +21,51 @@ class HuggingFaceAPI {
     }
 
     /**
+     * 从文件对象中提取 Buffer
+     * 兼容 multer 文件对象（{ buffer, size, ... }）、原生 Buffer、Blob/File 等多种类型
+     * @param {Object|Buffer|Blob} file - 文件对象
+     * @returns {Promise<Buffer>} 文件的 Buffer 数据
+     */
+    async _getBuffer(file) {
+        // 原生 Buffer 直接返回
+        if (Buffer.isBuffer(file)) {
+            return file;
+        }
+        // multer 文件对象：file.buffer 是 Node.js Buffer
+        if (file.buffer) {
+            return file.buffer;
+        }
+        // 浏览器 Blob/File 对象：需要异步转换
+        if (file.arrayBuffer) {
+            return Buffer.from(await file.arrayBuffer());
+        }
+        throw new Error('Unsupported file type: cannot extract Buffer');
+    }
+
+    /**
+     * 获取文件大小（字节）
+     * 兼容 multer 文件对象、原生 Buffer、Blob/File 等多种类型
+     * @param {Object|Buffer|Blob} file - 文件对象
+     * @returns {number} 文件大小（字节）
+     */
+    _getSize(file) {
+        if (Buffer.isBuffer(file)) {
+            return file.length;
+        }
+        // multer 文件对象有 size 属性；Blob/File 也有 size 属性
+        if (file.size !== undefined) {
+            return file.size;
+        }
+        throw new Error('Unsupported file type: cannot determine size');
+    }
+
+    /**
      * 计算文件的 SHA256 哈希（仅在未提供预计算哈希时使用）
-     * @param {Blob|Buffer} blob 
+     * @param {Object|Buffer|Blob} file - 文件对象
      * @returns {Promise<string>} hex string
      */
-    async sha256(blob) {
-        let buffer;
-        
-        if (Buffer.isBuffer(blob)) {
-            buffer = blob;
-        } else if (blob.buffer) {
-            buffer = blob.buffer;
-        } else {
-            buffer = await blob.arrayBuffer();
-        }
-        
+    async sha256(file) {
+        const buffer = await this._getBuffer(file);
         const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
         const hashArray = Array.from(new Uint8Array(hashBuffer));
         return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -166,15 +196,9 @@ class HuggingFaceAPI {
             return await this.uploadMultipart(uploadAction, file, oid);
         }
 
-        // 基本上传
+        // 基本上传：统一通过 _getBuffer 提取 Buffer
         console.log('Uploading to LFS (basic):', href);
-        
-        let body = file;
-        if (Buffer.isBuffer(file)) {
-            body = file;
-        } else if (file.buffer) {
-            body = file.buffer;
-        }
+        const body = await this._getBuffer(file);
         
         const response = await fetch(href, {
             method: 'PUT',
@@ -192,13 +216,18 @@ class HuggingFaceAPI {
 
     /**
      * 分片上传（大文件）
+     * 兼容 multer 文件对象（file.buffer）、原生 Buffer、Blob/File 等多种类型
      * @param {object} uploadAction - 上传动作信息
-     * @param {File|Blob} file - 文件
+     * @param {Object|Buffer|Blob} file - 文件对象
      * @param {string} oid - 文件的 SHA256 哈希
      */
     async uploadMultipart(uploadAction, file, oid) {
         const { href: completionUrl, header } = uploadAction;
         const chunkSize = parseInt(header.chunk_size);
+
+        // 统一提取 Buffer，兼容 multer 文件对象和原生 Buffer
+        const buffer = await this._getBuffer(file);
+        const fileSize = this._getSize(file);
         
         // 获取所有分片的上传 URL
         const parts = Object.keys(header).filter(key => /^[0-9]+$/.test(key));
@@ -209,10 +238,11 @@ class HuggingFaceAPI {
         for (const part of parts) {
             const index = parseInt(part) - 1;
             const start = index * chunkSize;
-            const end = Math.min(start + chunkSize, file.size);
-            const chunk = file.slice(start, end);
+            const end = Math.min(start + chunkSize, fileSize);
+            // 使用 Buffer.slice 截取分片数据（multer 文件对象无 slice 方法，必须通过 buffer 操作）
+            const chunk = buffer.slice(start, end);
             
-            console.log(`Uploading part ${part}/${parts.length}`);
+            console.log(`Uploading part ${part}/${parts.length}, bytes ${start}-${end}`);
             const response = await fetch(header[part], {
                 method: 'PUT',
                 body: chunk
@@ -363,10 +393,11 @@ class HuggingFaceAPI {
                 throw new Error('Failed to create or access repository');
             }
 
+            const fileSize = this._getSize(file);
             console.log('=== HuggingFace LFS Upload ===');
             console.log('Repo:', this.repo);
             console.log('Path:', filePath);
-            console.log('Size:', file.size);
+            console.log('Size:', fileSize);
 
             // 1. 使用预计算的 SHA256 或在后端计算
             let oid;
@@ -379,20 +410,14 @@ class HuggingFaceAPI {
                 console.log('SHA256:', oid);
             }
 
-            // 2. 获取文件样本（前512字节的base64）
-            let sampleBytes;
-            if (Buffer.isBuffer(file)) {
-                sampleBytes = new Uint8Array(file.slice(0, 512));
-            } else if (file.buffer) {
-                sampleBytes = new Uint8Array(file.buffer.slice(0, 512));
-            } else {
-                sampleBytes = new Uint8Array(await file.slice(0, 512).arrayBuffer());
-            }
+            // 2. 获取文件样本（前512字节的base64），统一通过 _getBuffer 提取
+            const sampleBuffer = await this._getBuffer(file);
+            const sampleBytes = new Uint8Array(sampleBuffer.slice(0, 512));
             const sample = btoa(String.fromCharCode(...sampleBytes));
 
             // 3. Preupload 检查
             console.log('Preupload check...');
-            const preuploadResult = await this.preupload(filePath, file.size, sample);
+            const preuploadResult = await this.preupload(filePath, fileSize, sample);
             console.log('Preupload result:', JSON.stringify(preuploadResult));
 
             const fileInfo = preuploadResult.files?.[0];
@@ -402,7 +427,7 @@ class HuggingFaceAPI {
             if (needsLfs) {
                 // 4. LFS Batch - 获取上传 URL
                 console.log('LFS batch request...');
-                const batchResult = await this.lfsBatch(oid, file.size);
+                const batchResult = await this.lfsBatch(oid, fileSize);
                 console.log('LFS batch result:', JSON.stringify(batchResult));
 
                 const obj = batchResult.objects?.[0];
@@ -421,7 +446,7 @@ class HuggingFaceAPI {
 
                 // 6. 提交 LFS 文件引用
                 console.log('Committing LFS file...');
-                const commitResult = await this.commitLfsFile(filePath, oid, file.size, commitMessage);
+                const commitResult = await this.commitLfsFile(filePath, oid, fileSize, commitMessage);
                 console.log('Commit result:', JSON.stringify(commitResult));
             } else {
                 // 非 LFS 文件：直接 base64 提交（小文本文件）
@@ -434,7 +459,7 @@ class HuggingFaceAPI {
                 success: true,
                 filePath,
                 fileUrl,
-                fileSize: file.size,
+                fileSize: fileSize,
                 oid
             };
 
@@ -446,11 +471,14 @@ class HuggingFaceAPI {
 
     /**
      * 直接提交文件（非 LFS，用于小文本文件）
+     * 兼容 multer 文件对象（file.buffer）、原生 Buffer、Blob/File 等多种类型
      */
     async commitDirectFile(filePath, file, commitMessage) {
         const url = `${this.baseURL}/api/datasets/${this.repo}/commit/main`;
         
-        const content = btoa(String.fromCharCode(...new Uint8Array(await file.arrayBuffer())));
+        // 统一通过 _getBuffer 提取 Buffer，避免调用 multer 文件对象不存在的 arrayBuffer() 方法
+        const buffer = await this._getBuffer(file);
+        const content = btoa(String.fromCharCode(...new Uint8Array(buffer)));
         
         const body = [
             JSON.stringify({

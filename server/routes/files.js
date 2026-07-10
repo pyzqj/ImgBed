@@ -108,6 +108,36 @@ async function uploadToTelegram(file, config) {
   };
 }
 
+/**
+ * 上传文件到 Local Drive 服务
+ * @param {Object} file - multer 文件对象
+ * @param {Object} config - Local Drive 配置（serverUrl, authToken, agentId）
+ * @returns {Promise<Object>} 包含 LocalDriveDownloadUrl 等元数据
+ */
+async function uploadToLocalDrive(file, config) {
+  const LocalDriveAPI = require('../api/localDriveAPI');
+  const api = new LocalDriveAPI(config.serverUrl, config.authToken, config.agentId || 'default');
+  
+  const result = await api.uploadFile(file);
+  
+  if (!result.success) {
+    throw new Error(result.message || 'Local Drive upload failed');
+  }
+  
+  // 拼接完整的直接下载地址
+  const directDownloadUrl = api.buildDirectDownloadUrl(result.download_url);
+  
+  return {
+    LocalDriveServerUrl: config.serverUrl,
+    LocalDriveAuthToken: config.authToken,
+    LocalDriveAgentId: result.agent_id || config.agentId || 'default',
+    LocalDrivePath: result.path,
+    LocalDriveDownloadUrl: directDownloadUrl,
+    LocalDriveSize: result.size,
+    LocalDriveSizeHuman: result.size_human
+  };
+}
+
 router.post('/upload', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     const { platform } = req.body;
@@ -116,7 +146,7 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
       return res.status(400).json({ error: 'Platform is required' });
     }
     
-    const validPlatforms = ['discord', 'huggingface', 'telegram'];
+    const validPlatforms = ['discord', 'huggingface', 'telegram', 'localdrive'];
     if (!validPlatforms.includes(platform)) {
       return res.status(400).json({ error: 'Invalid platform' });
     }
@@ -138,6 +168,8 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
       platformData = await uploadToHuggingFace(req.file, config);
     } else if (platform === 'telegram') {
       platformData = await uploadToTelegram(req.file, config);
+    } else if (platform === 'localdrive') {
+      platformData = await uploadToLocalDrive(req.file, config);
     }
     
     const timestamp = Date.now();
@@ -178,7 +210,8 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
 
     const accessUrl = `${req.protocol}://${req.get('host')}/file/${fileId}`;
 
-    res.json({
+    // Local Drive 通道额外返回拼接好的直接下载地址
+    const responseData = {
       success: true,
       fileId,
       platform,
@@ -186,7 +219,13 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
       fileSize: req.file.size,
       contentType: req.file.mimetype,
       accessUrl
-    });
+    };
+
+    if (platform === 'localdrive' && platformData.LocalDriveDownloadUrl) {
+      responseData.directDownloadUrl = platformData.LocalDriveDownloadUrl;
+    }
+
+    res.json(responseData);
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: error.message || 'Upload failed' });
@@ -201,7 +240,7 @@ router.post('/api-upload', authenticateAPI, upload.single('file'), async (req, r
       return res.status(400).json({ error: 'Platform is required' });
     }
     
-    const validPlatforms = ['discord', 'huggingface', 'telegram'];
+    const validPlatforms = ['discord', 'huggingface', 'telegram', 'localdrive'];
     if (!validPlatforms.includes(platform)) {
       return res.status(400).json({ error: 'Invalid platform' });
     }
@@ -223,6 +262,8 @@ router.post('/api-upload', authenticateAPI, upload.single('file'), async (req, r
       platformData = await uploadToHuggingFace(req.file, config);
     } else if (platform === 'telegram') {
       platformData = await uploadToTelegram(req.file, config);
+    } else if (platform === 'localdrive') {
+      platformData = await uploadToLocalDrive(req.file, config);
     }
     
     const timestamp = Date.now();
@@ -257,7 +298,8 @@ router.post('/api-upload', authenticateAPI, upload.single('file'), async (req, r
 
     const accessUrl = `/file/${fileId}`;
 
-    res.json({
+    // Local Drive 通道额外返回拼接好的直接下载地址
+    const responseData = {
       success: true,
       fileId,
       platform,
@@ -265,7 +307,13 @@ router.post('/api-upload', authenticateAPI, upload.single('file'), async (req, r
       fileSize: req.file.size,
       contentType: req.file.mimetype,
       accessUrl
-    });
+    };
+
+    if (platform === 'localdrive' && platformData.LocalDriveDownloadUrl) {
+      responseData.directDownloadUrl = platformData.LocalDriveDownloadUrl;
+    }
+
+    res.json(responseData);
   } catch (error) {
     console.error('API upload error:', error);
     res.status(500).json({ error: error.message || 'Upload failed' });
@@ -359,6 +407,29 @@ router.get('/:fileId(*)', async (req, res) => {
       
       const api = new TelegramAPI(botToken, '');
       fileResponse = await api.getFileContent(metadata.TgFileId);
+    } else if (channel.startsWith('localdrive')) {
+      // Local Drive: 从元数据中获取直接下载地址，代理获取文件内容
+      const LocalDriveAPI = require('../api/localDriveAPI');
+      let serverUrl = metadata.LocalDriveServerUrl;
+      let authToken = metadata.LocalDriveAuthToken;
+      
+      // 元数据中缺失时回退到配置
+      if (!serverUrl || !authToken) {
+        const config = getConfig(1, 'localdrive');
+        if (!config) {
+          return res.status(500).json({ error: 'Local Drive config not found' });
+        }
+        serverUrl = config.serverUrl;
+        authToken = config.authToken;
+      }
+      
+      const downloadUrl = metadata.LocalDriveDownloadUrl;
+      if (!downloadUrl) {
+        return res.status(500).json({ error: 'Local Drive download URL not found in metadata' });
+      }
+      
+      const api = new LocalDriveAPI(serverUrl, authToken, metadata.LocalDriveAgentId || 'default');
+      fileResponse = await api.getFileContent(downloadUrl);
     } else {
       return res.status(400).json({ error: `Unsupported channel type: ${channel}` });
     }

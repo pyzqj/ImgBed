@@ -1,7 +1,7 @@
 {
   "name": "imgbed",
   "version": "1.0.0",
-  "description": "Multi-platform image hosting service with Discord, HuggingFace, and Telegram",
+  "description": "Multi-platform image hosting service with Discord, HuggingFace, Telegram, and Local Drive",
   "main": "server/index.js",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
@@ -14,7 +14,8 @@
     "image-hosting",
     "discord",
     "huggingface",
-    "telegram"
+    "telegram",
+    "local-drive"
   ],
   "author": "",
   "license": "MIT",

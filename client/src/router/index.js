@@ -29,6 +29,12 @@ const routes = [
     name: 'Settings',
     component: () => import('@/views/Settings.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/api-docs',
+    name: 'ApiDocs',
+    component: () => import('@/views/ApiDocs.vue'),
+    meta: { requiresAuth: true }
   }
 ];
 

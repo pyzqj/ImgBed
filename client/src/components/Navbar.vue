@@ -11,6 +11,7 @@
       <div class="nav-links">
         <router-link to="/upload" class="nav-link">上传</router-link>
         <router-link to="/files" class="nav-link">文件列表</router-link>
+        <router-link to="/api-docs" class="nav-link">API 文档</router-link>
         <router-link to="/settings" class="nav-link">设置</router-link>
         <button @click="handleLogout" class="ghibli-button ghibli-button-secondary logout-button">退出</button>
       </div>

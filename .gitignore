@@ -5,3 +5,5 @@ test
 Doc
 .env
 *.db
+!data/
+data/*.db
