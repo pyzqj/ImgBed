@@ -1,13 +1,16 @@
 const express = require('express');
 const multer = require('multer');
 const iconv = require('iconv-lite');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const { saveFile, getFile, listFiles, countFiles, deleteFile, getConfig } = require('../database');
 const { authenticateToken, authenticateAPI } = require('../middleware');
 
 const router = express.Router();
 
 // 文件大小限制：通过环境变量 MAX_FILE_SIZE 配置（单位：字节）
-// 默认 500MB，设置为 0 表示不限制
+// 默认 0 表示不限制
 const MAX_FILE_SIZE = (() => {
   const envValue = parseInt(process.env.MAX_FILE_SIZE);
   if (isNaN(envValue) || envValue === 0) {
@@ -24,8 +27,22 @@ const PLATFORM_SIZE_LIMITS = {
   localdrive: Infinity             // Local Drive: 不限制
 };
 
+// 临时文件存储目录，使用系统临时目录
+const UPLOAD_TMP_DIR = path.join(os.tmpdir(), 'imgbed-uploads');
+if (!fs.existsSync(UPLOAD_TMP_DIR)) {
+  fs.mkdirSync(UPLOAD_TMP_DIR, { recursive: true });
+}
+
+// 使用磁盘存储，避免大文件撑爆内存
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, UPLOAD_TMP_DIR),
+    filename: (req, file, cb) => {
+      // 使用时间戳 + 随机数避免文件名冲突
+      const uniqueName = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      cb(null, uniqueName);
+    }
+  }),
   limits: {
     fileSize: MAX_FILE_SIZE
   },
@@ -156,6 +173,20 @@ async function uploadToLocalDrive(file, config) {
   };
 }
 
+/**
+ * 清理 Multer 磁盘存储产生的临时文件
+ * 在上传完成或失败后调用
+ */
+function cleanupTempFile(file) {
+  if (file && file.path) {
+    fs.unlink(file.path, (err) => {
+      if (err && err.code !== 'ENOENT') {
+        console.error('Failed to cleanup temp file:', file.path, err);
+      }
+    });
+  }
+}
+
 router.post('/upload', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     const { platform } = req.body;
@@ -254,6 +285,9 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: error.message || 'Upload failed' });
+  } finally {
+    // 清理磁盘临时文件
+    cleanupTempFile(req.file);
   }
 });
 
@@ -349,6 +383,9 @@ router.post('/api-upload', authenticateAPI, upload.single('file'), async (req, r
   } catch (error) {
     console.error('API upload error:', error);
     res.status(500).json({ error: error.message || 'Upload failed' });
+  } finally {
+    // 清理磁盘临时文件
+    cleanupTempFile(req.file);
   }
 });
 

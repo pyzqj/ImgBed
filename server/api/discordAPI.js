@@ -4,6 +4,7 @@
  */
 const FormData = require('form-data');
 const fetch = require('node-fetch');
+const fs = require('fs');
 
 class DiscordAPI {
     constructor(botToken) {
@@ -12,6 +13,17 @@ class DiscordAPI {
         this.defaultHeaders = {
             'User-Agent': 'DiscordBot (CloudFlare-ImgBed, 1.0)'
         };
+    }
+
+    /**
+     * 从 multer 文件对象获取可上传的数据（流或 Buffer）
+     * 磁盘存储时使用流式读取，内存存储时使用 Buffer
+     */
+    _getFileData(file) {
+        if (file.path) {
+            return fs.createReadStream(file.path);
+        }
+        return file.buffer;
     }
 
     /**
@@ -24,11 +36,13 @@ class DiscordAPI {
     async sendFile(file, channelId, fileName = '') {
         const formData = new FormData();
         
+        const fileData = this._getFileData(file);
+        
         // Discord 使用 files[0] 作为文件字段名
         if (fileName) {
-            formData.append('files[0]', file.buffer, fileName);
+            formData.append('files[0]', fileData, fileName);
         } else {
-            formData.append('files[0]', file.buffer);
+            formData.append('files[0]', fileData);
         }
 
         const response = await fetch(`${this.baseURL}/channels/${channelId}/messages`, {

@@ -31,7 +31,12 @@ class HuggingFaceAPI {
         if (Buffer.isBuffer(file)) {
             return file;
         }
-        // multer 文件对象：file.buffer 是 Node.js Buffer
+        // multer 磁盘存储：从文件路径读取
+        if (file.path) {
+            const fs = require('fs');
+            return fs.readFileSync(file.path);
+        }
+        // multer 内存存储：file.buffer 是 Node.js Buffer
         if (file.buffer) {
             return file.buffer;
         }

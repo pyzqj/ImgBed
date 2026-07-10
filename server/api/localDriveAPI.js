@@ -4,6 +4,7 @@
  */
 const FormData = require('form-data');
 const fetch = require('node-fetch');
+const fs = require('fs');
 
 class LocalDriveAPI {
     /**
@@ -19,20 +20,37 @@ class LocalDriveAPI {
 
     /**
      * 上传文件到 Local Drive 服务
+     * 支持磁盘存储（file.path）和内存存储（file.buffer）两种模式
+     * 磁盘模式下使用流式传输，避免大文件撑爆内存
      * @param {Object} file - multer 文件对象
      * @returns {Promise<Object>} 上传响应数据，包含 download_url 等信息
      */
     async uploadFile(file) {
         const formData = new FormData();
 
-        // 提取文件 Buffer，兼容 multer 文件对象和原生 Buffer
-        let fileBuffer = file.buffer;
-        if (!fileBuffer && file._buf) {
-            fileBuffer = file._buf;
+        const fileName = file.originalname || `file_${Date.now()}`;
+
+        // 磁盘存储：使用流式读取，避免大文件撑爆内存
+        // 内存存储：使用 Buffer
+        let fileData;
+        let knownSize;
+        if (file.path) {
+            fileData = fs.createReadStream(file.path);
+            knownSize = file.size;
+        } else if (file.buffer) {
+            fileData = file.buffer;
+            knownSize = file.size;
+        } else if (file._buf) {
+            fileData = file._buf;
+            knownSize = file._buf.length;
         }
 
-        const fileName = file.originalname || `file_${Date.now()}`;
-        formData.append('file', fileBuffer, { filename: fileName });
+        // 传入文件大小信息，让 form-data 正确设置 Content-Length
+        const options = { filename: fileName };
+        if (knownSize) {
+            options.knownLength = knownSize;
+        }
+        formData.append('file', fileData, options);
         formData.append('agent_id', this.agentId);
 
         // file_path 可选，默认使用文件名

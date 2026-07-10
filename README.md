@@ -999,3 +999,11 @@ MIT License
   - 改为通过环境变量 `MAX_FILE_SIZE` 配置（单位：字节），默认不限制
   - 新增各平台独立大小限制检查：Discord 25MB、Telegram 50MB、HuggingFace 和 Local Drive 不限制
   - Local Drive 通道现可上传任意大小文件
+- 修复大文件上传 524 超时错误
+  - Multer 从内存存储改为磁盘存储，避免大文件撑爆内存
+  - 各 API 改用流式传输（`fs.createReadStream`），避免二次内存拷贝
+  - 服务器超时通过环境变量 `SERVER_TIMEOUT` / `KEEP_ALIVE_TIMEOUT` 配置，默认不超时
+  - 上传完成后自动清理磁盘临时文件
+- 前端上传前文件大小预检
+  - 选择文件时即根据当前平台限制校验大小，超限直接标记错误，不发起上传
+  - 新增单文件重试功能，大小超限的文件不显示重试按钮

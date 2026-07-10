@@ -58,6 +58,7 @@
                   <span v-else-if="item.status === 'success'" class="status-badge status-success">✓ 成功</span>
                   <span v-else-if="item.status === 'error'" class="status-badge status-error">✕ 失败</span>
                   <span v-else class="status-badge status-pending">等待中</span>
+                  <button v-if="!uploading && item.status === 'error' && !item.error?.includes('超过')" @click="retryUpload(index)" class="file-retry-btn">重试</button>
                   <button v-if="!uploading" @click="removeFile(index)" class="file-remove-btn">移除</button>
                 </div>
               </div>
@@ -151,6 +152,23 @@ const authStore = useAuthStore();
 // 最大并发上传数，控制同时上传的文件数量
 const MAX_CONCURRENT_UPLOADS = 3;
 
+// 各平台文件大小限制（单位：字节，与后端保持一致）
+// 设为 0 表示不限制
+const PLATFORM_SIZE_LIMITS = {
+  discord: 25 * 1024 * 1024,       // Discord: 25MB
+  telegram: 50 * 1024 * 1024,      // Telegram Bot: 50MB
+  huggingface: 0,                   // HuggingFace: 不限制
+  localdrive: 0                     // Local Drive: 不限制
+};
+
+// 平台显示名称映射
+const PLATFORM_NAMES = {
+  discord: 'Discord',
+  telegram: 'Telegram',
+  huggingface: 'HuggingFace',
+  localdrive: 'Local Drive'
+};
+
 /* ========== 响应式状态 ========== */
 const isDragOver = ref(false);
 // 文件列表，每项结构: { uid, file, progress, status, result, error }
@@ -165,12 +183,12 @@ let fileUidCounter = 0;
 
 /* ========== 计算属性 ========== */
 
-// 是否有可上传的文件（存在 pending 或 error 状态的文件）
+// 是否有可上传的文件（存在 pending 状态的文件，error 状态不自动重试）
 const canUpload = computed(() => 
   selectedFiles.value.length > 0 && 
   selectedPlatform.value && 
   !uploading.value &&
-  selectedFiles.value.some(f => f.status === 'pending' || f.status === 'error')
+  selectedFiles.value.some(f => f.status === 'pending')
 );
 
 // 上传按钮文字
@@ -178,7 +196,7 @@ const uploadButtonText = computed(() => {
   if (uploading.value) {
     return `上传中 (${uploadCompletedCount.value}/${selectedFiles.value.length})`;
   }
-  const hasFailed = selectedFiles.value.some(f => f.status === 'error');
+  const hasFailed = selectedFiles.value.some(f => f.status === 'error' && !f.error?.includes('超过'));
   const hasPending = selectedFiles.value.some(f => f.status === 'pending');
   if (hasFailed && !hasPending) return '重试失败';
   return '上传';
@@ -217,16 +235,27 @@ function handleFileSelect(e) {
   e.target.value = '';
 }
 
-/** 将选择的文件添加到列表中 */
+/** 检查文件大小是否超过当前所选平台的限制 */
+function validateFileSize(file) {
+  const limit = PLATFORM_SIZE_LIMITS[selectedPlatform.value];
+  if (limit && limit > 0 && file.size > limit) {
+    const limitMB = (limit / 1024 / 1024).toFixed(0);
+    return `文件超过 ${PLATFORM_NAMES[selectedPlatform.value]} 限制（最大 ${limitMB}MB）`;
+  }
+  return '';
+}
+
+/** 将选择的文件添加到列表中，上传前即校验大小 */
 function addFiles(files) {
   for (const file of files) {
+    const sizeError = validateFileSize(file);
     selectedFiles.value.push({
       uid: ++fileUidCounter,
       file,
       progress: 0,
-      status: 'pending',
+      status: sizeError ? 'error' : 'pending',
       result: null,
-      error: ''
+      error: sizeError
     });
   }
 }
@@ -234,6 +263,18 @@ function addFiles(files) {
 /** 移除单个文件 */
 function removeFile(index) {
   selectedFiles.value.splice(index, 1);
+}
+
+/** 重试单个失败文件 */
+function retryUpload(index) {
+  const item = selectedFiles.value[index];
+  if (!item || item.status !== 'error') return;
+  item.status = 'pending';
+  item.error = '';
+  item.progress = 0;
+  item.result = null;
+  // 自动触发单文件上传
+  uploadOne(item);
 }
 
 /** 清除全部文件 */
@@ -304,9 +345,9 @@ async function handleUpload() {
   uploading.value = true;
   uploadError.value = '';
   
-  // 筛选需要上传的文件（pending 或 error 状态）
+  // 只上传 pending 状态的文件（error 状态需手动重试）
   const pendingItems = selectedFiles.value.filter(
-    f => f.status === 'pending' || f.status === 'error'
+    f => f.status === 'pending'
   );
   
   // 并发上传池
@@ -609,6 +650,23 @@ h1 {
   opacity: 1;
   color: #f44336;
   background: rgba(244, 67, 54, 0.08);
+}
+
+.file-retry-btn {
+  background: none;
+  border: none;
+  color: var(--ghibli-primary);
+  opacity: 0.8;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: var(--ghibli-radius-sm);
+  transition: all 0.2s ease;
+}
+
+.file-retry-btn:hover {
+  opacity: 1;
+  background: rgba(124, 185, 168, 0.12);
 }
 
 /* 单文件进度条 */

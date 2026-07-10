@@ -2,12 +2,18 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 require('dotenv').config();
 
 const { initDatabase } = require('./database');
 const authRoutes = require('./routes/auth');
 const configRoutes = require('./routes/config');
 const fileRoutes = require('./routes/files');
+
+// 服务器超时配置（通过环境变量可调）
+// 默认 0 表示不超时，适合大文件上传场景
+const SERVER_TIMEOUT = parseInt(process.env.SERVER_TIMEOUT) || 0;
+const KEEP_ALIVE_TIMEOUT = parseInt(process.env.KEEP_ALIVE_TIMEOUT) || 0;
 
 async function startServer() {
   const app = express();
@@ -59,12 +65,22 @@ async function startServer() {
 
   app.use((err, req, res, next) => {
     console.error('Error:', err);
+    // Multer 文件大小超限错误
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: '文件大小超过服务器限制' });
+    }
     res.status(500).json({ error: 'Internal server error' });
   });
 
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`ImgBed server running on http://localhost:${PORT}`);
   });
+
+  // 设置服务器超时，0 表示不超时（大文件上传场景）
+  server.timeout = SERVER_TIMEOUT;
+  server.keepAliveTimeout = KEEP_ALIVE_TIMEOUT;
+  server.requestTimeout = SERVER_TIMEOUT;
+  server.headersTimeout = SERVER_TIMEOUT;
 }
 
 startServer().catch(console.error);

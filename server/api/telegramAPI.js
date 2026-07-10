@@ -4,6 +4,7 @@
 const FormData = require('form-data');
 const fetch = require('node-fetch');
 const { Readable } = require('stream');
+const fs = require('fs');
 
 class TelegramAPI {
     constructor(botToken, proxyUrl = '') {
@@ -19,6 +20,20 @@ class TelegramAPI {
     }
 
     /**
+     * 从 multer 文件对象获取可上传的数据（流或 Buffer）
+     * 磁盘存储时使用流式读取，内存存储时使用 Buffer
+     */
+    _getFileData(file) {
+        if (Buffer.isBuffer(file)) {
+            return file;
+        }
+        if (file.path) {
+            return fs.createReadStream(file.path);
+        }
+        return file.buffer;
+    }
+
+    /**
      * 发送文件到Telegram
      * @param {File|Buffer} file - 要发送的文件
      * @param {string} chatId - 聊天ID
@@ -31,13 +46,7 @@ class TelegramAPI {
 
         formData.append('chat_id', chatId);
         
-        let fileData = file;
-        
-        if (Buffer.isBuffer(file)) {
-            fileData = file;
-        } else if (file.buffer) {
-            fileData = file.buffer;
-        }
+        let fileData = this._getFileData(file);
         
         if (fileName) {
             formData.append(functionType, fileData, { filename: fileName });
