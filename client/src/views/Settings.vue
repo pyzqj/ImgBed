@@ -257,6 +257,12 @@
             <div class="api-key-tips">
               <p>Local Drive 通道会将文件上传到指定的 Local Drive 服务器，上传成功后会返回拼接好的直接下载地址。</p>
               <p>认证方式: Bearer Token，请求头格式 <code>Authorization: Bearer {token}</code></p>
+              <p v-if="localDriveConfig.serverUrl && localDriveConfig.serverUrl.startsWith('http://') && window.location.protocol === 'https:'" class="tip-warning">
+                ⚠️ 当前页面为 HTTPS，但服务器地址为 HTTP。浏览器将阻止直传（Mixed Content），
+                系统会自动回退为通过 ImgBed 服务器中转上传，大文件可能因 CDN 超时而失败。
+                建议为 Local Drive 服务器配置 HTTPS（如使用 Nginx + Let's Encrypt 或通过 CDN 代理），
+                配置后地址改为 <code>https://...</code> 即可启用直传模式。
+              </p>
             </div>
             
             <button type="submit" :disabled="localDriveLoading" class="ghibli-button ghibli-button-primary submit-button">
@@ -735,6 +741,15 @@ input[type="checkbox"]:hover {
   font-size: 12px;
   font-family: 'Courier New', monospace;
   color: var(--ghibli-sage);
+}
+
+.tip-warning {
+  color: #e65100 !important;
+  background: rgba(255, 152, 0, 0.08);
+  padding: 8px 12px;
+  border-radius: var(--ghibli-radius-md);
+  border-left: 3px solid #ff9800;
+  line-height: 1.8 !important;
 }
 
 .api-docs-link {

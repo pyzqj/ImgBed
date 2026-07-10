@@ -326,7 +326,20 @@ async function getLocalDriveConfig() {
 }
 
 /**
+ * 判断 Local Drive 是否可以使用直传模式
+ * 直传条件：Local Drive 服务器地址为 HTTPS，或者当前页面为 HTTP（无混合内容限制）
+ * 如果当前页面是 HTTPS 但 Local Drive 地址是 HTTP，浏览器会阻止请求（Mixed Content）
+ */
+function canUseDirectUpload(serverUrl) {
+  const pageIsHttps = window.location.protocol === 'https:';
+  const serverIsHttps = serverUrl.startsWith('https://');
+  // 页面 HTTP 时无限制；页面 HTTPS 时服务器也必须 HTTPS
+  return !pageIsHttps || serverIsHttps;
+}
+
+/**
  * Local Drive 直传：前端直接上传到 Local Drive 服务器，绕过 CDN
+ * 仅在 Local Drive 服务器支持 HTTPS 时使用，避免 Mixed Content 错误
  * 上传成功后调用 ImgBed 后端记录元数据
  */
 async function uploadOneLocalDriveDirect(item) {
@@ -372,6 +385,32 @@ async function uploadOneLocalDriveDirect(item) {
 }
 
 /**
+ * Local Drive 中转上传：通过 ImgBed 服务器代理上传到 Local Drive
+ * 当 Local Drive 服务器仅支持 HTTP 时使用（HTTPS 页面无法直接请求 HTTP 资源）
+ * 注意：大文件可能因 CDN 超时而失败，建议为 Local Drive 服务器配置 HTTPS
+ */
+async function uploadOneLocalDriveProxy(item) {
+  const formData = new FormData();
+  formData.append('file', item.file);
+  formData.append('platform', 'localdrive');
+
+  const response = await axios.post('/api/files/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      Authorization: `Bearer ${authStore.token}`
+    },
+    onUploadProgress: (progressEvent) => {
+      if (progressEvent.total) {
+        item.progress = Math.round(
+          (progressEvent.loaded / progressEvent.total) * 100
+        );
+      }
+    }
+  });
+  return response.data;
+}
+
+/**
  * 上传单个文件（含进度回调）
  * 职责：仅处理一个文件的上传和状态更新
  * Local Drive 通道使用直传模式，绕过 CDN
@@ -386,8 +425,16 @@ async function uploadOne(item) {
     let responseData;
 
     if (selectedPlatform.value === 'localdrive') {
-      // Local Drive 直传模式：前端直连 Local Drive 服务器，绕过 CDN
-      responseData = await uploadOneLocalDriveDirect(item);
+      // Local Drive 上传：优先直传模式（绕过 CDN），不满足条件时回退中转模式
+      const config = await getLocalDriveConfig();
+      if (canUseDirectUpload(config.serverUrl)) {
+        // 直传模式：前端直连 Local Drive 服务器，绕过 CDN
+        responseData = await uploadOneLocalDriveDirect(item);
+      } else {
+        // 中转模式：通过 ImgBed 服务器代理上传（Local Drive 服务器未配置 HTTPS）
+        console.warn('Local Drive 服务器地址为 HTTP，HTTPS 页面无法直传，回退为中转模式。建议为 Local Drive 服务器配置 HTTPS 以启用直传。');
+        responseData = await uploadOneLocalDriveProxy(item);
+      }
     } else {
       // 其他平台：通过 ImgBed 服务器中转上传
       const formData = new FormData();
