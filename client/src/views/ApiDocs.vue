@@ -78,12 +78,12 @@ Content-Type: multipart/form-data</pre>
           <div class="code-block">
             <pre>{
   "success": true,
-  "fileId": "1770138855551_test.jpg",
+  "fileId": "1700000000000_test.jpg",
   "platform": "discord",
   "fileName": "test.jpg",
   "fileSize": 12345,
   "contentType": "image/jpeg",
-  "accessUrl": "/file/1770138855551_test.jpg"
+  "accessUrl": "/file/1700000000000_test.jpg"
 }</pre>
           </div>
 
@@ -93,7 +93,7 @@ Content-Type: multipart/form-data</pre>
               <li>API 上传返回<strong>相对路径</strong>（不包含域名）</li>
               <li><code>accessUrl</code> 格式：<code>/file/{fileId}</code></li>
               <li>需要调用方根据部署域名拼接完整 URL</li>
-              <li>拼接示例：<code>{{ baseUrl }}/file/1770138855551_test.jpg</code></li>
+              <li>拼接示例：<code>{{ baseUrl }}/file/1700000000000_test.jpg</code></li>
               <li><strong>Local Drive 通道额外返回 <code>directDownloadUrl</code> 字段</strong>，即拼接好的原通道直接下载地址，可直接使用</li>
             </ul>
           </div>
@@ -142,7 +142,7 @@ Content-Type: multipart/form-data</pre>
 
           <p>上传成功后，拼接完整 URL 即可直接访问文件：</p>
           <div class="code-block">
-            <pre>GET {{ baseUrl }}/file/1770138855551_test.jpg</pre>
+            <pre>GET {{ baseUrl }}/file/1700000000000_test.jpg</pre>
           </div>
 
           <div class="tips-block">

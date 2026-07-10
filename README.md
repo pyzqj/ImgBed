@@ -287,7 +287,7 @@ npm run server
 
 **注意**：
 - 支持中文文件名
-- 文件 ID 格式为 `时间戳_文件名`，例如：`1770138855551_藏AJB887-1768730510667.jpg`
+- 文件 ID 格式为 `时间戳_文件名`，例如：`1700000000000_example.jpg`
 - 支持的最大文件大小为 100MB
 - 可以在 `server/routes/files.js` 中修改 `limits.fileSize` 来调整限制
 
@@ -438,12 +438,12 @@ platform: discord
 ```json
 {
   "success": true,
-  "fileId": "1770138855551_test.jpg",
+  "fileId": "1700000000000_test.jpg",
   "platform": "discord",
   "fileName": "test.jpg",
   "fileSize": 12345,
   "contentType": "image/jpeg",
-  "accessUrl": "http://localhost:3000/file/1770138855551_test.jpg"
+  "accessUrl": "http://localhost:3000/file/1700000000000_test.jpg"
 }
 ```
 
@@ -452,12 +452,12 @@ platform: discord
 ```json
 {
   "success": true,
-  "fileId": "1770138855551_test.pdf",
+  "fileId": "1700000000000_test.pdf",
   "platform": "localdrive",
   "fileName": "test.pdf",
   "fileSize": 12345,
   "contentType": "application/pdf",
-  "accessUrl": "http://localhost:3000/file/1770138855551_test.pdf",
+  "accessUrl": "http://localhost:3000/file/1700000000000_test.pdf",
   "directDownloadUrl": "http://your-server:port/api/local-drive/download/default/test.pdf"
 }
 ```
@@ -494,12 +494,12 @@ platform: discord
 ```json
 {
   "success": true,
-  "fileId": "1770138855551_test.jpg",
+  "fileId": "1700000000000_test.jpg",
   "platform": "discord",
   "fileName": "test.jpg",
   "fileSize": 12345,
   "contentType": "image/jpeg",
-  "accessUrl": "/file/1770138855551_test.jpg"
+  "accessUrl": "/file/1700000000000_test.jpg"
 }
 ```
 
@@ -508,12 +508,12 @@ platform: discord
 ```json
 {
   "success": true,
-  "fileId": "1770138855551_test.pdf",
+  "fileId": "1700000000000_test.pdf",
   "platform": "localdrive",
   "fileName": "test.pdf",
   "fileSize": 12345,
   "contentType": "application/pdf",
-  "accessUrl": "/file/1770138855551_test.pdf",
+  "accessUrl": "/file/1700000000000_test.pdf",
   "directDownloadUrl": "http://your-server:port/api/local-drive/download/default/test.pdf"
 }
 ```
@@ -522,7 +522,7 @@ platform: discord
 - API 上传返回**相对路径**（不包含域名）
 - `accessUrl` 格式：`/file/{fileId}`
 - **需要调用方根据部署域名拼接完整URL**
-- 拼接示例：`http://your-domain.com/file/1770138855551_test.jpg`
+- 拼接示例：`http://your-domain.com/file/1700000000000_test.jpg`
 - **Local Drive 通道额外返回 `directDownloadUrl` 字段**，即拼接好的原通道直接下载地址
 
 **错误响应（401）：**
@@ -548,13 +548,13 @@ GET /file/{fileId}
 **示例：**
 
 ```http
-GET /file/1770138855551_test.jpg
+GET /file/1700000000000_test.jpg
 ```
 
 **中文文件名示例：**
 
 ```http
-GET /file/1770138855551_%E8%97%8F%E8%BD%A6%E8%BD%AC%E8%BD%A6.jpg
+GET /file/1700000000000_%E7%A4%BA%E4%BE%8B%E5%9B%BE%E7%89%87.jpg
 ```
 
 **成功响应（200）：**
@@ -595,15 +595,15 @@ Authorization: Bearer {token}
 {
   "files": [
     {
-      "id": "1770138855551_test.jpg",
-      "file_id": "1770138855551_test.jpg",
+      "id": "1700000000000_test.jpg",
+      "file_id": "1700000000000_test.jpg",
       "file_name": "test.jpg",
       "file_type": "image/jpeg",
       "content_type": "image/jpeg",
       "file_size": 123456,
       "platform": "discord",
       "channel": "Discord",
-      "timestamp": 1770138855551,
+      "timestamp": 1700000000000,
       "created_at": "2024-01-01T12:00:00.000Z",
       "updated_at": "2024-01-01T12:00:00.000Z"
     }
@@ -769,18 +769,18 @@ curl -X GET "http://localhost:3000/api/files?limit=10&offset=0" \
 
 ```bash
 # 普通文件名
-curl -X GET http://localhost:3000/file/1770138855551_test.jpg \
+curl -X GET http://localhost:3000/file/1700000000000_test.jpg \
   --output test.jpg
 
 # 中文文件名（URL 编码）
-curl -X GET "http://localhost:3000/file/1770138855551_%E8%97%8F%E8%BD%A6%E8%BD%AC%E8%BD%A6.jpg" \
+curl -X GET "http://localhost:3000/file/1700000000000_%E7%A4%BA%E4%BE%8B%E5%9B%BE%E7%89%87.jpg" \
   --output test.jpg
 ```
 
 #### 6. 删除文件
 
 ```bash
-curl -X DELETE http://localhost:3000/api/files/1770138855551_test.jpg \
+curl -X DELETE http://localhost:3000/api/files/1700000000000_test.jpg \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
 
