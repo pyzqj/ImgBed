@@ -288,8 +288,8 @@ npm run server
 **注意**：
 - 支持中文文件名
 - 文件 ID 格式为 `时间戳_文件名`，例如：`1700000000000_example.jpg`
-- 支持的最大文件大小为 100MB
-- 可以在 `server/routes/files.js` 中修改 `limits.fileSize` 来调整限制
+- 文件大小限制通过环境变量 `MAX_FILE_SIZE` 配置（单位：字节），默认不限制
+- 各平台有独立的大小限制：Discord 25MB、Telegram 50MB、HuggingFace 和 Local Drive 不限制
 
 ### 4. 管理文件
 
@@ -430,7 +430,7 @@ platform: discord
 ```
 
 **参数说明：**
-- `file` (required): 文件二进制数据，最大 100MB
+- `file` (required): 文件二进制数据，大小限制取决于目标平台
 - `platform` (required): 目标平台，可选值：`discord`、`huggingface`、`telegram`、`localdrive`
 
 **成功响应（200）：**
@@ -485,7 +485,7 @@ platform: discord
 ```
 
 **参数说明：**
-- `file` (required): 文件二进制数据，最大 100MB
+- `file` (required): 文件二进制数据，大小限制取决于目标平台
 - `platform` (required): 目标平台，可选值：`discord`、`huggingface`、`telegram`、`localdrive`
 - `X-API-Key` (required): API 密钥，可在设置页面配置或从 `.env` 文件配置
 
@@ -992,3 +992,10 @@ MIT License
   - 前端路由守卫增加服务端 Token 验证，页面加载时自动检测 Token 有效性
   - 添加全局 axios 401/403 响应拦截器，Token 过期自动清除凭证并跳转登录页
   - 解决问题：CDN 缓存导致页面已加载但 Token 已过期时，功能不可用且不自动跳转登录
+
+### v1.0.3
+- 修复文件大小限制问题
+  - 原 Multer 硬编码 100MB 限制导致大文件上传 500 错误
+  - 改为通过环境变量 `MAX_FILE_SIZE` 配置（单位：字节），默认不限制
+  - 新增各平台独立大小限制检查：Discord 25MB、Telegram 50MB、HuggingFace 和 Local Drive 不限制
+  - Local Drive 通道现可上传任意大小文件

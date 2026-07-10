@@ -6,10 +6,28 @@ const { authenticateToken, authenticateAPI } = require('../middleware');
 
 const router = express.Router();
 
+// 文件大小限制：通过环境变量 MAX_FILE_SIZE 配置（单位：字节）
+// 默认 500MB，设置为 0 表示不限制
+const MAX_FILE_SIZE = (() => {
+  const envValue = parseInt(process.env.MAX_FILE_SIZE);
+  if (isNaN(envValue) || envValue === 0) {
+    return Infinity; // 不限制
+  }
+  return envValue;
+})();
+
+// 各平台文件大小限制（单位：字节）
+const PLATFORM_SIZE_LIMITS = {
+  discord: 25 * 1024 * 1024,      // Discord: 25MB
+  telegram: 50 * 1024 * 1024,     // Telegram Bot: 50MB
+  huggingface: Infinity,           // HuggingFace: 不限制
+  localdrive: Infinity             // Local Drive: 不限制
+};
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 100 * 1024 * 1024
+    fileSize: MAX_FILE_SIZE
   },
   fileFilter: (req, file, cb) => {
     try {
@@ -155,6 +173,13 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
       return res.status(400).json({ error: 'No file uploaded' });
     }
     
+    // 平台级文件大小检查
+    const platformLimit = PLATFORM_SIZE_LIMITS[platform];
+    if (platformLimit !== Infinity && req.file.size > platformLimit) {
+      const limitMB = (platformLimit / 1024 / 1024).toFixed(0);
+      return res.status(413).json({ error: `File too large for ${platform}. Maximum: ${limitMB}MB` });
+    }
+    
     const config = getConfig(req.user.id, platform);
     if (!config) {
       return res.status(400).json({ error: `${platform} config not found. Please configure ${platform} first.` });
@@ -247,6 +272,13 @@ router.post('/api-upload', authenticateAPI, upload.single('file'), async (req, r
     
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    // 平台级文件大小检查
+    const platformLimit = PLATFORM_SIZE_LIMITS[platform];
+    if (platformLimit !== Infinity && req.file.size > platformLimit) {
+      const limitMB = (platformLimit / 1024 / 1024).toFixed(0);
+      return res.status(413).json({ error: `File too large for ${platform}. Maximum: ${limitMB}MB` });
     }
     
     const config = getConfig(1, platform);
