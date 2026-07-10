@@ -39,7 +39,7 @@
         </button>
       </form>
       
-      <p class="hint">默认账号: admin / admin</p>
+      <p class="hint">默认账号: admin / admin123</p>
     </div>
   </div>
 </template>
