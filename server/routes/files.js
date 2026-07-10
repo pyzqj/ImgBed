@@ -389,6 +389,90 @@ router.post('/api-upload', authenticateAPI, upload.single('file'), async (req, r
   }
 });
 
+/**
+ * Local Drive 直传模式：前端直接上传文件到 Local Drive 服务器后，
+ * 调用此端点提交元数据，绕过 CDN 中转，避免大文件超时
+ * 请求体：{ fileName, fileSize, contentType, uploadResult }
+ * uploadResult 为 Local Drive 服务器返回的上传响应
+ */
+router.post('/local-drive-direct', authenticateToken, async (req, res) => {
+  try {
+    const { fileName, fileSize, contentType, uploadResult } = req.body;
+
+    if (!fileName || !uploadResult) {
+      return res.status(400).json({ error: 'fileName and uploadResult are required' });
+    }
+
+    // 获取 Local Drive 配置，用于拼接下载地址和保存元数据
+    const config = getConfig(req.user.id, 'localdrive');
+    if (!config) {
+      return res.status(400).json({ error: 'Local Drive config not found. Please configure Local Drive first.' });
+    }
+
+    const LocalDriveAPI = require('../api/localDriveAPI');
+    const api = new LocalDriveAPI(config.serverUrl, config.authToken, config.agentId || 'default');
+
+    // 拼接完整的直接下载地址
+    const directDownloadUrl = api.buildDirectDownloadUrl(uploadResult.download_url);
+
+    const timestamp = Date.now();
+    const fileId = `${timestamp}_${fileName}`;
+
+    const platformData = {
+      LocalDriveServerUrl: config.serverUrl,
+      LocalDriveAuthToken: config.authToken,
+      LocalDriveAgentId: uploadResult.agent_id || config.agentId || 'default',
+      LocalDrivePath: uploadResult.path,
+      LocalDriveDownloadUrl: directDownloadUrl,
+      LocalDriveSize: uploadResult.size,
+      LocalDriveSizeHuman: uploadResult.size_human
+    };
+
+    const metadata = {
+      FileName: fileName,
+      FileType: contentType || 'application/octet-stream',
+      FileSize: (fileSize / 1024 / 1024).toFixed(2),
+      UploadIP: req.ip || 'unknown',
+      UploadAddress: '',
+      ListType: 'None',
+      TimeStamp: timestamp,
+      Label: 'None',
+      Directory: '',
+      Tags: [],
+      Channel: 'Localdrive',
+      ChannelName: '',
+      ...platformData
+    };
+
+    saveFile(
+      fileId,
+      'localdrive',
+      metadata,
+      fileName,
+      contentType || 'application/octet-stream',
+      (fileSize / 1024 / 1024).toFixed(2),
+      req.ip || 'unknown',
+      ''
+    );
+
+    const accessUrl = `${req.protocol}://${req.get('host')}/file/${fileId}`;
+
+    res.json({
+      success: true,
+      fileId,
+      platform: 'localdrive',
+      fileName,
+      fileSize,
+      contentType: contentType || 'application/octet-stream',
+      accessUrl,
+      directDownloadUrl
+    });
+  } catch (error) {
+    console.error('Local Drive direct upload metadata error:', error);
+    res.status(500).json({ error: error.message || 'Failed to save file metadata' });
+  }
+});
+
 router.get('/', authenticateToken, (req, res) => {
   try {
     const { limit = 50, offset = 0 } = req.query;

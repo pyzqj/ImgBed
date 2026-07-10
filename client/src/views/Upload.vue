@@ -169,6 +169,11 @@ const PLATFORM_NAMES = {
   localdrive: 'Local Drive'
 };
 
+/* ========== Local Drive 直传配置缓存 ========== */
+// 缓存 Local Drive 配置，避免每次上传都请求
+let localDriveConfigCache = null;
+let localDriveConfigLoading = null;
+
 /* ========== 响应式状态 ========== */
 const isDragOver = ref(false);
 // 文件列表，每项结构: { uid, file, progress, status, result, error }
@@ -297,8 +302,79 @@ function formatFileSize(bytes) {
 /* ========== 上传逻辑 ========== */
 
 /**
+ * 获取 Local Drive 配置（带缓存）
+ * 直传模式下需要前端直接访问 Local Drive 服务器
+ */
+async function getLocalDriveConfig() {
+  if (localDriveConfigCache) return localDriveConfigCache;
+  if (localDriveConfigLoading) return localDriveConfigLoading;
+
+  localDriveConfigLoading = axios.get('/api/config/localdrive', {
+    headers: { Authorization: `Bearer ${authStore.token}` }
+  }).then(response => {
+    const config = response.data;
+    if (!config.serverUrl || !config.authToken) {
+      throw new Error('Local Drive 配置不完整，请在设置页面配置服务器地址和认证令牌');
+    }
+    localDriveConfigCache = config;
+    return config;
+  }).finally(() => {
+    localDriveConfigLoading = null;
+  });
+
+  return localDriveConfigLoading;
+}
+
+/**
+ * Local Drive 直传：前端直接上传到 Local Drive 服务器，绕过 CDN
+ * 上传成功后调用 ImgBed 后端记录元数据
+ */
+async function uploadOneLocalDriveDirect(item) {
+  const config = await getLocalDriveConfig();
+  const serverUrl = config.serverUrl.replace(/\/+$/, '');
+  const agentId = config.agentId || 'default';
+
+  // 第一步：直接上传到 Local Drive 服务器
+  const formData = new FormData();
+  formData.append('file', item.file);
+  formData.append('agent_id', agentId);
+  formData.append('file_path', item.file.name);
+
+  const uploadUrl = `${serverUrl}/api/local-drive/upload`;
+  const uploadResponse = await axios.post(uploadUrl, formData, {
+    headers: {
+      'Authorization': `Bearer ${config.authToken}`
+    },
+    onUploadProgress: (progressEvent) => {
+      if (progressEvent.total) {
+        // 直传进度占 90%，剩余 10% 留给元数据提交
+        item.progress = Math.round((progressEvent.loaded / progressEvent.total) * 90);
+      }
+    }
+  });
+
+  if (!uploadResponse.data.success) {
+    throw new Error(uploadResponse.data.message || 'Local Drive 上传失败');
+  }
+
+  // 第二步：提交元数据到 ImgBed 后端
+  item.progress = 95;
+  const metaResponse = await axios.post('/api/files/local-drive-direct', {
+    fileName: item.file.name,
+    fileSize: item.file.size,
+    contentType: item.file.type,
+    uploadResult: uploadResponse.data
+  }, {
+    headers: { Authorization: `Bearer ${authStore.token}` }
+  });
+
+  return metaResponse.data;
+}
+
+/**
  * 上传单个文件（含进度回调）
  * 职责：仅处理一个文件的上传和状态更新
+ * Local Drive 通道使用直传模式，绕过 CDN
  */
 async function uploadOne(item) {
   item.status = 'uploading';
@@ -306,28 +382,36 @@ async function uploadOne(item) {
   item.error = '';
   item.result = null;
   
-  const formData = new FormData();
-  formData.append('file', item.file);
-  formData.append('platform', selectedPlatform.value);
-  
   try {
-    const response = await axios.post('/api/files/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        Authorization: `Bearer ${authStore.token}`
-      },
-      // 上传进度回调，实时更新单个文件进度
-      onUploadProgress: (progressEvent) => {
-        if (progressEvent.total) {
-          item.progress = Math.round(
-            (progressEvent.loaded / progressEvent.total) * 100
-          );
+    let responseData;
+
+    if (selectedPlatform.value === 'localdrive') {
+      // Local Drive 直传模式：前端直连 Local Drive 服务器，绕过 CDN
+      responseData = await uploadOneLocalDriveDirect(item);
+    } else {
+      // 其他平台：通过 ImgBed 服务器中转上传
+      const formData = new FormData();
+      formData.append('file', item.file);
+      formData.append('platform', selectedPlatform.value);
+
+      const response = await axios.post('/api/files/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${authStore.token}`
+        },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            item.progress = Math.round(
+              (progressEvent.loaded / progressEvent.total) * 100
+            );
+          }
         }
-      }
-    });
+      });
+      responseData = response.data;
+    }
     
     item.status = 'success';
-    item.result = response.data;
+    item.result = responseData;
     item.progress = 100;
   } catch (error) {
     item.status = 'error';
