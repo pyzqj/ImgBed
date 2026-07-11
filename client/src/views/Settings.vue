@@ -263,6 +263,10 @@
                 建议为 Local Drive 服务器配置 HTTPS（如使用 Nginx + Let's Encrypt 或通过 CDN 代理），
                 配置后地址改为 <code>https://...</code> 即可启用直传模式。
               </p>
+              <p v-if="showLocalDriveCorsTip" class="tip-info">
+                ℹ️ 启用直传模式还需在 Local Drive 服务器上配置 CORS，允许 <code>{{ currentOrigin }}</code> 跨域访问。
+                Nginx 配置示例：<code>add_header Access-Control-Allow-Origin "{{ currentOrigin }}";</code>
+              </p>
             </div>
             
             <button type="submit" :disabled="localDriveLoading" class="ghibli-button ghibli-button-primary submit-button">
@@ -334,6 +338,14 @@ const showLocalDriveHttpsWarning = computed(() => {
   return localDriveConfig.value.serverUrl &&
     localDriveConfig.value.serverUrl.startsWith('http://') &&
     window.location.protocol === 'https:';
+});
+
+// Local Drive CORS 提示：HTTPS 服务器地址（满足直传条件）时提示配置 CORS
+const currentOrigin = computed(() => window.location.origin);
+const showLocalDriveCorsTip = computed(() => {
+  return localDriveConfig.value.serverUrl &&
+    localDriveConfig.value.serverUrl.startsWith('https://') &&
+    !showLocalDriveHttpsWarning.value;
 });
 
 async function loadConfigs() {
@@ -756,6 +768,15 @@ input[type="checkbox"]:hover {
   padding: 8px 12px;
   border-radius: var(--ghibli-radius-md);
   border-left: 3px solid #ff9800;
+  line-height: 1.8 !important;
+}
+
+.tip-info {
+  color: #1565c0 !important;
+  background: rgba(33, 150, 243, 0.06);
+  padding: 8px 12px;
+  border-radius: var(--ghibli-radius-md);
+  border-left: 3px solid #2196f3;
   line-height: 1.8 !important;
 }
 

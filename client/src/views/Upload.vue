@@ -433,11 +433,30 @@ async function uploadOne(item) {
     let responseData;
 
     if (selectedPlatform.value === 'localdrive') {
-      // Local Drive 上传：优先直传模式（绕过 CDN），不满足条件时回退中转模式
+      // Local Drive 上传：优先直传模式（绕过 CDN），失败时自动回退中转模式
       const config = await getLocalDriveConfig();
       if (canUseDirectUpload(config.serverUrl)) {
-        // 直传模式：前端直连 Local Drive 服务器，绕过 CDN
-        responseData = await uploadOneLocalDriveDirect(item);
+        try {
+          // 直传模式：前端直连 Local Drive 服务器，绕过 CDN
+          responseData = await uploadOneLocalDriveDirect(item);
+        } catch (directError) {
+          // CORS 错误或网络错误，回退到中转模式
+          // CORS 错误特征：无 response 对象，message 含 "Network Error" 或被 CORS 拦截
+          const isCorsOrNetwork = !directError.response && (
+            directError.message?.includes('Network Error') ||
+            directError.message?.includes('CORS') ||
+            directError.message?.includes('Failed to fetch') ||
+            directError.code === 'ERR_NETWORK'
+          );
+          if (isCorsOrNetwork) {
+            console.warn('Local Drive 直传失败（CORS/网络），回退为中转模式。建议在 Local Drive 服务器配置 CORS 允许 ' + window.location.origin + ' 访问。', directError.message);
+            // 重置进度，走中转模式
+            item.progress = 0;
+            responseData = await uploadOneLocalDriveProxy(item);
+          } else {
+            throw directError;
+          }
+        }
       } else {
         // 中转模式：通过 ImgBed 服务器代理上传（Local Drive 服务器未配置 HTTPS）
         console.warn('Local Drive 服务器地址为 HTTP，HTTPS 页面无法直传，回退为中转模式。建议为 Local Drive 服务器配置 HTTPS 以启用直传。');
