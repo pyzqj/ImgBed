@@ -6,6 +6,10 @@ const FormData = require('form-data');
 const fetch = require('node-fetch');
 const fs = require('fs');
 
+// 请求超时时间（毫秒），通过环境变量可配置
+// 默认 30 秒，超时后立即返回错误，避免 CDN 524
+const REQUEST_TIMEOUT = parseInt(process.env.LOCAL_DRIVE_TIMEOUT) || 30000;
+
 class LocalDriveAPI {
     /**
      * @param {string} serverUrl - Local Drive 服务地址（如 http://your-server:port）
@@ -17,6 +21,19 @@ class LocalDriveAPI {
         this.authToken = authToken;
         this.agentId = agentId || 'default';
     }
+
+    /**
+     * 创建带超时的 AbortController
+     * @param {number} timeout - 超时时间（毫秒）
+     * @returns {AbortController} 控制器对象
+     */
+    _createTimeoutController(timeout = REQUEST_TIMEOUT) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeout);
+        // 确保定时器不阻止进程退出
+        if (timer.unref) timer.unref();
+        return { controller, timer };
+    };
 
     /**
      * 上传文件到 Local Drive 服务
@@ -57,22 +74,39 @@ class LocalDriveAPI {
         formData.append('file_path', fileName);
 
         const uploadUrl = `${this.serverUrl}/api/local-drive/upload`;
-        const response = await fetch(uploadUrl, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${this.authToken}`,
-                ...formData.getHeaders()
-            },
-            body: formData
-        });
+        const { controller, timer } = this._createTimeoutController();
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Local Drive API error: ${response.status} ${response.statusText} - ${errorText}`);
+        console.log(`[LocalDrive] Uploading to: ${uploadUrl}, fileName: ${fileName}, size: ${knownSize || 'unknown'}`);
+
+        try {
+            const response = await fetch(uploadUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`,
+                    ...formData.getHeaders()
+                },
+                body: formData,
+                signal: controller.signal
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Local Drive API error: ${response.status} ${response.statusText} - ${errorText}`);
+            }
+
+            const responseData = await response.json();
+            console.log(`[LocalDrive] Upload success: ${fileName}`);
+            return responseData;
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.error(`[LocalDrive] Upload timeout after ${REQUEST_TIMEOUT}ms: ${uploadUrl}`);
+                throw new Error(`Local Drive 服务器请求超时（${REQUEST_TIMEOUT / 1000}秒），请检查服务器是否正常运行：${this.serverUrl}`);
+            }
+            console.error(`[LocalDrive] Upload failed:`, error.message);
+            throw error;
+        } finally {
+            clearTimeout(timer);
         }
-
-        const responseData = await response.json();
-        return responseData;
     }
 
     /**
@@ -96,14 +130,27 @@ class LocalDriveAPI {
      * @returns {Promise<Response>} fetch 响应对象
      */
     async getFileContent(directDownloadUrl) {
-        const response = await fetch(directDownloadUrl, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${this.authToken}`
-            }
-        });
+        const { controller, timer } = this._createTimeoutController();
 
-        return response;
+        try {
+            const response = await fetch(directDownloadUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`
+                },
+                signal: controller.signal
+            });
+
+            return response;
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.error(`[LocalDrive] Download timeout: ${directDownloadUrl}`);
+                throw new Error(`Local Drive 下载超时`);
+            }
+            throw error;
+        } finally {
+            clearTimeout(timer);
+        }
     }
 }
 
