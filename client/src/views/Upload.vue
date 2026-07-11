@@ -394,20 +394,28 @@ async function uploadOneLocalDriveProxy(item) {
   formData.append('file', item.file);
   formData.append('platform', 'localdrive');
 
-  const response = await axios.post('/api/files/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-      Authorization: `Bearer ${authStore.token}`
-    },
-    onUploadProgress: (progressEvent) => {
-      if (progressEvent.total) {
-        item.progress = Math.round(
-          (progressEvent.loaded / progressEvent.total) * 100
-        );
+  try {
+    const response = await axios.post('/api/files/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        Authorization: `Bearer ${authStore.token}`
+      },
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total) {
+          item.progress = Math.round(
+            (progressEvent.loaded / progressEvent.total) * 100
+          );
+        }
       }
+    });
+    return response.data;
+  } catch (error) {
+    // 524 是 CDN 超时，中转模式下大文件容易触发
+    if (error.response?.status === 524 || error.message?.includes('524')) {
+      throw new Error('CDN 超时（524）：Local Drive 服务器未配置 HTTPS，无法使用直传模式。请为 Local Drive 服务器配置 HTTPS 后启用直传，或减小文件大小。');
     }
-  });
-  return response.data;
+    throw error;
+  }
 }
 
 /**

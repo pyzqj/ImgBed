@@ -257,7 +257,7 @@
             <div class="api-key-tips">
               <p>Local Drive 通道会将文件上传到指定的 Local Drive 服务器，上传成功后会返回拼接好的直接下载地址。</p>
               <p>认证方式: Bearer Token，请求头格式 <code>Authorization: Bearer {token}</code></p>
-              <p v-if="localDriveConfig.serverUrl && localDriveConfig.serverUrl.startsWith('http://') && window.location.protocol === 'https:'" class="tip-warning">
+              <p v-if="showLocalDriveHttpsWarning" class="tip-warning">
                 ⚠️ 当前页面为 HTTPS，但服务器地址为 HTTP。浏览器将阻止直传（Mixed Content），
                 系统会自动回退为通过 ImgBed 服务器中转上传，大文件可能因 CDN 超时而失败。
                 建议为 Local Drive 服务器配置 HTTPS（如使用 Nginx + Let's Encrypt 或通过 CDN 代理），
@@ -328,6 +328,13 @@ const apiKeyLoading = ref(false);
 const apiKeyError = ref('');
 const apiKeySuccess = ref(false);
 const apiKeySource = ref('');
+
+// Local Drive HTTPS 警告：HTTPS 页面 + HTTP 服务器地址时显示
+const showLocalDriveHttpsWarning = computed(() => {
+  return localDriveConfig.value.serverUrl &&
+    localDriveConfig.value.serverUrl.startsWith('http://') &&
+    window.location.protocol === 'https:';
+});
 
 async function loadConfigs() {
   try {
